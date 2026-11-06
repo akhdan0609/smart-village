@@ -1,0 +1,15 @@
+{
+  "name": "Website Resmi Desa Warung Menteng",
+  "short_name": "Desa Warung Menteng",
+  "description": "Portal Informasi, Potensi, Pelayanan Surat Administrasi, Aspirasi & Pengaduan, serta Kontak Darurat Desa Warung Menteng.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#053727",
+  "lang": "id",
+  "icons": [
+    { "src": "/WarungMenteng.png", "sizes": "any", "type": "image/png" },
+    { "src": "/logo_desa_warung_menteng.jpg", "sizes": "any", "type": "image/jpeg" }
+  ]
+}

@@ -1,0 +1,129 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const asyncHandler = require('../utils/asyncHandler');
+const { authRequired, requireRole } = require('../middleware/auth');
+const {
+  uploadKknSilabus,
+  KKN_SILABUS_DIR,
+  KKN_SILABUS_FILENAME
+} = require('../middleware/upload');
+const { sendOk, sendError } = require('../utils/http');
+
+const router = express.Router();
+
+const SILABUS_PATH = path.join(KKN_SILABUS_DIR, KKN_SILABUS_FILENAME);
+const SILABUS_URL = `/uploads/kkn/${KKN_SILABUS_FILENAME}`;
+
+const PDF_HEADER = Buffer.from('%PDF-');
+const PDF_MIN_SIZE = 100;
+const PDF_TAIL_WINDOW = 4096;
+
+function silabusInfo() {
+  if (!fs.existsSync(SILABUS_PATH)) {
+    return {
+      available: false,
+      url: SILABUS_URL,
+      filename: KKN_SILABUS_FILENAME,
+      size: null,
+      updatedAt: null
+    };
+  }
+
+  const stat = fs.statSync(SILABUS_PATH);
+
+  return {
+    available: true,
+    url: SILABUS_URL,
+    filename: KKN_SILABUS_FILENAME,
+    size: stat.size,
+    updatedAt: stat.mtime.toISOString()
+  };
+}
+
+function isValidPdf(filePath) {
+  let stat = null;
+  let handle = null;
+
+  try {
+    stat = fs.statSync(filePath);
+
+    if (!stat.isFile() || stat.size < PDF_MIN_SIZE) {
+      return false;
+    }
+
+    handle = fs.openSync(filePath, 'r');
+
+    const header = Buffer.alloc(PDF_HEADER.length);
+    fs.readSync(handle, header, 0, header.length, 0);
+
+    if (!header.equals(PDF_HEADER)) {
+      return false;
+    }
+
+    const tailLength = Math.min(PDF_TAIL_WINDOW, stat.size);
+    const tail = Buffer.alloc(tailLength);
+    fs.readSync(handle, tail, 0, tailLength, stat.size - tailLength);
+
+    return tail.includes(Buffer.from('%%EOF'));
+  } catch {
+    return false;
+  } finally {
+    if (handle !== null) {
+      try {
+        fs.closeSync(handle);
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+function receiveSilabus(req, res, next) {
+  uploadKknSilabus.single('file')(req, res, (err) => {
+    if (!err) {
+      return next();
+    }
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return sendError(res, 'Ukuran file maksimal 15 MB', 422);
+    }
+
+    return sendError(res, err.message || 'Upload gagal', 422);
+  });
+}
+
+router.get(
+  '/silabus',
+  asyncHandler(async (req, res) => sendOk(res, silabusInfo()))
+);
+
+router.post(
+  '/silabus',
+  authRequired,
+  requireRole('admin_1', 'admin_2'),
+  receiveSilabus,
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return sendError(res, 'file is required', 422);
+    }
+
+    const tempPath = req.file.path;
+
+    if (!isValidPdf(tempPath)) {
+      fs.unlink(tempPath, () => {});
+      return sendError(res, 'File bukan PDF yang valid', 422);
+    }
+
+    try {
+      fs.renameSync(tempPath, SILABUS_PATH);
+    } catch (error) {
+      fs.unlink(tempPath, () => {});
+      return sendError(res, 'Gagal menyimpan file', 500);
+    }
+
+    return sendOk(res, silabusInfo());
+  })
+);
+
+module.exports = router;

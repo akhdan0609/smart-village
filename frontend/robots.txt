@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /staff
+
+# Panel admin & portal staff tidak perlu diindeks mesin pencari.
+Sitemap: https://smartvillage.cloud/sitemap.xml

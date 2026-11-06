@@ -1,0 +1,98 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { query } = require('../db');
+const asyncHandler = require('../utils/asyncHandler');
+const { sendOk, sendError } = require('../utils/http');
+
+const router = express.Router();
+
+router.post('/login', asyncHandler(async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return sendError(res, 'username and password are required', 422);
+
+  const result = await query(
+    `SELECT id, username, password_hash, name, role, avatar_url, is_active
+     FROM admin_user
+     WHERE username = $1
+     LIMIT 1`,
+    [username]
+  );
+
+  const user = result.rows[0];
+  if (!user || !user.is_active) return sendError(res, 'Invalid credentials', 401);
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return sendError(res, 'Invalid credentials', 401);
+
+  const token = jwt.sign(
+    { sub: String(user.id), username: user.username, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+  );
+
+  await query(
+    `UPDATE admin_user SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1`,
+    [user.id]
+  );
+
+  // Audit log login
+  await query(
+    `INSERT INTO activity_log (
+       admin_user_id,
+       action,
+       entity_type,
+       entity_id,
+       detail,
+       ip_address,
+       user_agent
+     )
+     VALUES ($1, 'login', 'admin_user', $1, $2::jsonb, $3, $4)`,
+    [
+      user.id,
+      JSON.stringify({ ip: req.ip }),
+      req.ip,
+      req.get('user-agent') || null
+    ]
+  );
+
+  return sendOk(res, {
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      avatar_url: user.avatar_url
+    }
+  });
+}));
+
+router.get('/me', require('../middleware/auth').authRequired, asyncHandler(async (req, res) => {
+  const result = await query(
+    `SELECT id, username, name, role, avatar_url, is_active, last_login_at, created_at
+     FROM admin_user WHERE id = $1`,
+    [req.user.sub]
+  );
+  if (!result.rowCount) return sendError(res, 'User not found', 404);
+  return sendOk(res, result.rows[0]);
+}));
+
+router.post('/change-password', require('../middleware/auth').authRequired, asyncHandler(async (req, res) => {
+  const { current_password, new_password } = req.body || {};
+  if (!current_password || !new_password) return sendError(res, 'current_password and new_password are required', 422);
+  if (new_password.length < 8) return sendError(res, 'New password must be at least 8 characters', 422);
+
+  const result = await query('SELECT password_hash FROM admin_user WHERE id = $1', [req.user.sub]);
+  if (!result.rowCount) return sendError(res, 'User not found', 404);
+
+  const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+  if (!valid) return sendError(res, 'Current password is incorrect', 401);
+
+  const hash = await bcrypt.hash(new_password, 12);
+  await query('UPDATE admin_user SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [hash, req.user.sub]);
+
+  return sendOk(res, { message: 'Password updated successfully' });
+}));
+
+module.exports = router;

@@ -1,0 +1,190 @@
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+
+const uploadDir = path.join(
+  __dirname,
+  '..',
+  'uploads',
+  'emergency'
+);
+
+// Pastikan folder upload tersedia
+fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const randomName = crypto.randomBytes(16).toString('hex');
+
+    cb(null, `${Date.now()}-${randomName}${ext}`);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    return cb(
+      new Error('Only JPG, JPEG, PNG, and WebP images are allowed')
+    );
+  }
+
+  cb(null, true);
+};
+
+const uploadEmergencyPhoto = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+});
+
+const complaintUploadDir = path.join(
+  __dirname,
+  '..',
+  'uploads',
+  'complaints'
+);
+
+// Pastikan folder upload complaint tersedia
+fs.mkdirSync(complaintUploadDir, { recursive: true });
+
+const complaintStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, complaintUploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const randomName = crypto.randomBytes(16).toString('hex');
+
+    cb(null, `${Date.now()}-${randomName}${ext}`);
+  }
+});
+
+const uploadComplaintAttachment = multer({
+  storage: complaintStorage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+});
+
+const generalUploadDir = path.join(
+  __dirname,
+  '..',
+  'uploads',
+  'general'
+);
+
+// Pastikan folder upload general tersedia
+fs.mkdirSync(generalUploadDir, { recursive: true });
+
+const generalStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, generalUploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const randomName = crypto.randomBytes(16).toString('hex');
+
+    cb(null, `${Date.now()}-${randomName}${ext}`);
+  }
+});
+
+const uploadGeneric = multer({
+  storage: generalStorage,
+  fileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024
+  }
+});
+
+const documentFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf'
+  ];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    return cb(
+      new Error('Only JPG, JPEG, PNG, WebP, and PDF files are allowed')
+    );
+  }
+
+  cb(null, true);
+};
+
+const uploadDocument = multer({
+  storage: generalStorage,
+  fileFilter: documentFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024
+  }
+});
+
+// Folder upload silabus KKN.
+// File ditulis dulu sebagai .tmp, divalidasi di route, baru dipindahkan ke
+// nama tetap supaya upload gagal tidak menimpa file lama yang masih valid.
+const kknDir = path.join(__dirname, '..', 'uploads', 'kkn');
+
+fs.mkdirSync(kknDir, { recursive: true });
+
+const KKN_SILABUS_FILENAME = 'silabus-pencegahan-kekerasan-seksual.pdf';
+const KKN_SILABUS_MAX_FILES = 20;
+
+const kknSilabusStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, kknDir);
+  },
+
+  filename: (req, file, cb) => {
+    cb(null, `.tmp-${crypto.randomBytes(12).toString('hex')}.pdf`);
+  }
+});
+
+const pdfOnlyFilter = (req, file, cb) => {
+  const isPdf =
+    file.mimetype === 'application/pdf' ||
+    path.extname(file.originalname).toLowerCase() === '.pdf';
+
+  if (!isPdf) {
+    return cb(new Error('Only PDF files are allowed'));
+  }
+
+  cb(null, true);
+};
+
+const uploadKknSilabus = multer({
+  storage: kknSilabusStorage,
+  fileFilter: pdfOnlyFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+    files: KKN_SILABUS_MAX_FILES
+  }
+});
+
+module.exports = {
+  uploadEmergencyPhoto,
+  uploadComplaintAttachment,
+  uploadGeneric,
+  uploadDocument,
+  uploadKknSilabus,
+  KKN_SILABUS_DIR: kknDir,
+  KKN_SILABUS_FILENAME,
+  KKN_SILABUS_MAX_FILES
+};
