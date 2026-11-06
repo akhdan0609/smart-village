@@ -1,4 +1,3 @@
-
 name: Deploy Smart Village to GitHub Pages
 
 on:
@@ -12,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
@@ -26,7 +25,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Prepare frontend
         run: |
           cd frontend
@@ -40,33 +39,27 @@ jobs:
             BASE_PATH="/$REPO"
           fi
 
-          # Tambahkan di sini
-          export BASE_PATH
+          # Sesuaikan lokasi aset JavaScript
+          find assets -type f -name "*.js" \
+            -exec sed -i "s|/assets/|${BASE_PATH}/assets/|g" {} +
 
-          python3 - <<'PY'
-          import os
-          import re
+          # Sesuaikan lokasi aset pada index.html
+          sed -i "s|=\"/assets/|=\"${BASE_PATH}/assets/|g" index.html
 
-          base = os.environ.get("BASE_PATH", "/smart-village")
+          sed -i "s|=\"/logo_warung_menteng.svg|=\"${BASE_PATH}/logo_warung_menteng.svg|g" index.html
 
-          with open("index.html", "r", encoding="utf-8") as f:
-              html = f.read()
+          sed -i "s|=\"/WarungMenteng.png|=\"${BASE_PATH}/WarungMenteng.png|g" index.html
 
-          html = re.sub(
-              r'(["\'])/assets/',
-              lambda m: m.group(1) + base + '/assets/',
-              html
-          )
+          sed -i "s|=\"/manifest.webmanifest|=\"${BASE_PATH}/manifest.webmanifest|g" index.html
 
-          html = html.replace(
-              '="/manifest.webmanifest',
-              '="' + base + '/manifest.webmanifest'
-          )
-
-          with open("index.html", "w", encoding="utf-8") as f:
-              f.write(html)
-          PY
-
+          # Fallback untuk SPA
           cp index.html 404.html
 
-      
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
