@@ -26,6 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      
       - name: Prepare frontend
         run: |
           cd frontend
@@ -39,20 +40,30 @@ jobs:
             BASE_PATH="/$REPO"
           fi
 
-          # Sesuaikan lokasi aset JavaScript
-          find assets -type f -name "*.js" \
-            -exec sed -i "s|/assets/|${BASE_PATH}/assets/|g" {} +
+          python3 - <<'PY'
+          import os
+          import re
 
-          # Sesuaikan lokasi aset pada index.html
-          sed -i "s|=\"/assets/|=\"${BASE_PATH}/assets/|g" index.html
+          base = os.environ.get("BASE_PATH", "/smart-village")
 
-          sed -i "s|=\"/logo_warung_menteng.svg|=\"${BASE_PATH}/logo_warung_menteng.svg|g" index.html
+          with open("index.html", "r", encoding="utf-8") as f:
+              html = f.read()
 
-          sed -i "s|=\"/WarungMenteng.png|=\"${BASE_PATH}/WarungMenteng.png|g" index.html
+          html = re.sub(
+              r'(["\'])/assets/',
+              lambda m: m.group(1) + base + '/assets/',
+              html
+          )
 
-          sed -i "s|=\"/manifest.webmanifest|=\"${BASE_PATH}/manifest.webmanifest|g" index.html
+          html = html.replace(
+              '="/manifest.webmanifest',
+              '="' + base + '/manifest.webmanifest'
+          )
 
-          # Fallback untuk SPA
+          with open("index.html", "w", encoding="utf-8") as f:
+              f.write(html)
+          PY
+
           cp index.html 404.html
 
       - name: Upload website
