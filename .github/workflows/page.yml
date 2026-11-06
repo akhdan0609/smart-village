@@ -26,21 +26,47 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
       - name: Prepare frontend
         run: |
-          test -f frontend/index.html || {
-            echo "index.html tidak ditemukan!"
-            exit 1
-          }
+          cd frontend
 
-          cp frontend/index.html frontend/404.html
+          REPO="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY%%/*}"
 
-      - name: Upload website
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend
+          if [ "$REPO" = "$OWNER.github.io" ]; then
+            BASE_PATH=""
+          else
+            BASE_PATH="/$REPO"
+          fi
 
-      - name: Deploy website
-        id: deployment
-        uses: actions/deploy-pages@v4
+          # Tambahkan di sini
+          export BASE_PATH
+
+          python3 - <<'PY'
+          import os
+          import re
+
+          base = os.environ.get("BASE_PATH", "/smart-village")
+
+          with open("index.html", "r", encoding="utf-8") as f:
+              html = f.read()
+
+          html = re.sub(
+              r'(["\'])/assets/',
+              lambda m: m.group(1) + base + '/assets/',
+              html
+          )
+
+          html = html.replace(
+              '="/manifest.webmanifest',
+              '="' + base + '/manifest.webmanifest'
+          )
+
+          with open("index.html", "w", encoding="utf-8") as f:
+              f.write(html)
+          PY
+
+          cp index.html 404.html
+
+      
