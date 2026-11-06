@@ -1,0 +1,66 @@
+
+name: Deploy Smart Village to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare frontend
+        run: |
+          cd frontend
+
+          REPO="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+
+          if [ "$REPO" = "$OWNER.github.io" ]; then
+            BASE_PATH=""
+          else
+            BASE_PATH="/$REPO"
+          fi
+
+          # Sesuaikan lokasi aset JavaScript
+          find assets -type f -name "*.js" \
+            -exec sed -i "s|/assets/|${BASE_PATH}/assets/|g" {} +
+
+          # Sesuaikan lokasi aset pada index.html
+          sed -i "s|=\"/assets/|=\"${BASE_PATH}/assets/|g" index.html
+
+          sed -i "s|=\"/logo_warung_menteng.svg|=\"${BASE_PATH}/logo_warung_menteng.svg|g" index.html
+
+          sed -i "s|=\"/WarungMenteng.png|=\"${BASE_PATH}/WarungMenteng.png|g" index.html
+
+          sed -i "s|=\"/manifest.webmanifest|=\"${BASE_PATH}/manifest.webmanifest|g" index.html
+
+          # Fallback untuk SPA
+          cp index.html 404.html
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
